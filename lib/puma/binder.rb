@@ -56,6 +56,10 @@ module Puma
           @inherited_fds[url] = fd.to_i
           remove << k
         elsif k == 'LISTEN_FDS' && ENV['LISTEN_PID'].to_i == $$
+          names = ENV['LISTEN_FDNAMES']
+          names &&= names.split(':').map do |n|
+            n.gsub( ';', ':' )
+          end
           v.to_i.times do |num|
             fd = num + 3
             sock = TCPServer.for_fd(fd)
@@ -68,6 +72,7 @@ module Puma
               end
               url = "tcp://#{addr}:#{port}"
             end
+            url = names[num] if names[num]
             @inherited_fds[url] = sock
             @events.debug "Registered #{url} for inheriting from LISTEN_FDS"
           end
