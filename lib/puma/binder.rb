@@ -58,18 +58,20 @@ module Puma
         elsif k == 'LISTEN_FDS' && ENV['LISTEN_PID'].to_i == $$
           v.to_i.times do |num|
             fd = num + 3
-            sock = TCPServer.for_fd(fd)
-            begin
-              url = "unix://" + Socket.unpack_sockaddr_un(sock.getsockname)
-            rescue ArgumentError
-              port, addr = Socket.unpack_sockaddr_in(sock.getsockname)
-              if addr =~ /\:/
-                addr = "[#{addr}]"
-              end
-              url = "tcp://#{addr}:#{port}"
+            sock = BasicSocket.for_fd(fd)
+            address = sock.local_address
+            case address.afamily
+            when Socket::AF_INET
+              url = "tcp://#{address.ip_address}:#{address.ip_port}"
+            when Socket::AF_INET6
+              url = "tcp://[#{address.ip_address}]:#{address.ip_port}"
+            when Socket::AF_UNIX
+              url = "unix://#{address.unix_path}"
+            else
+              raise "Unknown LISTEN_FDS[#{fd}] address family #{address.afamily}"
             end
-            @inherited_fds[url] = sock
-            @events.debug "Registered #{url} for inheriting from LISTEN_FDS"
+            @inherited_fds[url] = fd
+            @events.debug "Registered (#{fd}) #{url} for inheriting from LISTEN_FDS"
           end
           remove << k << 'LISTEN_PID'
         end
